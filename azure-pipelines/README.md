@@ -42,6 +42,21 @@ immutable tag** built once is promoted across envs — no rebuilds.
    and `azure-pipelines/ci.yml`. Add `pr-validation` as a **branch policy /
    build validation** on `main`.
 
+   Step 4 is scripted — run `setup-ado.ps1` (Windows) or `setup-ado.sh` once
+   instead of clicking through the UI:
+
+   ```powershell
+   $env:AZURE_DEVOPS_EXT_PAT = "<ado-pat>"
+   ./azure-pipelines/setup-ado.ps1 `
+     -OrgUrl https://dev.azure.com/<org> -Project <project> `
+     -GitHubServiceConnection "<github-service-connection-name>"
+   ```
+
+   It's idempotent (skips pipelines that already exist) and creates only the two
+   pipeline definitions. The branch policy, Environment approvals, and the shared
+   variable group / service connection / Environments stay manual — the script
+   prints exactly what's left.
+
 ## Notes
 
 - Hosted `ubuntu-latest` agents have `podman` available; `az acr login
