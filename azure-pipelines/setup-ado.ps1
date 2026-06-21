@@ -37,7 +37,9 @@ $ErrorActionPreference = "Stop"
 
 function New-Pipeline {
   param([string]$Name, [string]$YamlPath, [string]$ScId)
-  $existing = az pipelines show --name $Name --org $OrgUrl --project $Project --query id -o tsv 2>$null
+  # Use `list` (returns empty when absent) — `show` errors on a missing pipeline,
+  # which would abort under $ErrorActionPreference = "Stop".
+  $existing = az pipelines list --org $OrgUrl --project $Project --query "[?name=='$Name'].id | [0]" -o tsv
   if ($existing) {
     Write-Host "= pipeline '$Name' already exists (id $existing) - skipping" -ForegroundColor Yellow
     return
@@ -52,8 +54,10 @@ function New-Pipeline {
     --skip-first-run true | Out-Null
 }
 
-# 1. Ensure the azure-devops CLI extension is present.
-if (-not (az extension show --name azure-devops -o tsv 2>$null)) {
+# 1. Ensure the azure-devops CLI extension is present. Use `list` (empty when
+# absent) — `show` errors on a missing extension, aborting under Stop.
+$hasExt = az extension list --query "[?name=='azure-devops'] | length(@)" -o tsv
+if ($hasExt -ne "1") {
   Write-Host "+ installing azure-devops extension" -ForegroundColor Green
   az extension add --name azure-devops --only-show-errors
 }
