@@ -1,0 +1,78 @@
+# Build once, promote across environments via GitOps tag bumps.
+#   Build      -> podman build/push image to ACR (immutable tag = build id)
+#   DeployDev  -> bump dev overlay      (auto)
+#   Preprod    -> bump preprod overlay  (manual approval on the preprod env)
+#   Prod       -> bump prod overlay     (manual approval on the prod env)
+# Rollback = revert the promotion commit in the Flux repo.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - azure-pipelines/**
+      - README.md
+
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: commodity-cicd # must define FLUX_PAT (secret) + azureServiceConnection
+  - name: acrName
+    value: akoscommodityacr
+  - name: acrLoginServer
+    value: akoscommodityacr.azurecr.io
+  - name: imageRepo
+    value: commodity-api
+  - name: imageTag
+    value: "$(Build.BuildId)" # constant across all stages of this run
+
+stages:
+  - stage: Build
+    displayName: Build & push image
+    jobs:
+      - job: build
+        displayName: Podman build + push
+        steps:
+          - task: AzureCLI@2
+            displayName: ACR login + build + push
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                TOKEN=$(az acr login -n $(acrName) --expose-token --query accessToken -o tsv)
+                echo "$TOKEN" | podman login $(acrLoginServer) \
+                  -u 00000000-0000-0000-0000-000000000000 --password-stdin
+                IMG=$(acrLoginServer)/$(imageRepo)
+                podman build -f Dockerfile -t $IMG:$(imageTag) -t $IMG:latest .
+                podman push $IMG:$(imageTag)
+                podman push $IMG:latest
+
+  - template: templates/promote-stage.yml
+    parameters:
+      stageName: DeployDev
+      displayName: Deploy to dev
+      dependsOn: [Build]
+      environment: commodity-dev
+      overlay: dev
+
+  - template: templates/promote-stage.yml
+    parameters:
+      stageName: Preprod
+      displayName: Promote to preprod
+      dependsOn: [DeployDev]
+      environment: commodity-preprod
+      overlay: preprod
+
+  - template: templates/promote-stage.yml
+    parameters:
+      stageName: Prod
+      displayName: Promote to prod
+      dependsOn: [Preprod]
+      environment: commodity-prod
+      overlay: prod

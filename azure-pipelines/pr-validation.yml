@@ -1,0 +1,38 @@
+# PR gate: lint + test the API. No deploys.
+# Configure as a branch policy build validation on main (recommended) so it
+# blocks merges; the pr: trigger below works for GitHub-hosted repos.
+trigger: none
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+jobs:
+  - job: api
+    displayName: API lint + tests
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: "3.12"
+      - script: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+        displayName: Install deps
+      - script: |
+          set -euo pipefail
+          ruff check .
+        displayName: Ruff lint
+      - script: |
+          set -euo pipefail
+          pytest -q --junitxml=$(Build.SourcesDirectory)/test-results.xml
+        displayName: Pytest
+      - task: PublishTestResults@2
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFiles: test-results.xml
+          testRunTitle: commodity-api

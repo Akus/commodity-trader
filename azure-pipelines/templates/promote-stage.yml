@@ -1,0 +1,46 @@
+# Reusable promotion stage: bumps the image tag in one Flux overlay and pushes
+# the commit. Flux then rolls the deployment. The `environment` is what gates
+# the stage — configure approvals/checks on that Environment in the Azure DevOps
+# UI (none on dev, manual approval on preprod/prod).
+parameters:
+  - name: stageName
+    type: string
+  - name: displayName
+    type: string
+  - name: dependsOn
+    type: object
+    default: []
+  - name: environment
+    type: string
+  - name: overlay
+    type: string # dev | preprod | prod
+
+stages:
+  - stage: ${{ parameters.stageName }}
+    displayName: ${{ parameters.displayName }}
+    dependsOn: ${{ parameters.dependsOn }}
+    jobs:
+      - deployment: promote
+        displayName: Promote ${{ parameters.overlay }}
+        environment: ${{ parameters.environment }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: none
+                - script: |
+                    set -euo pipefail
+                    git clone "https://x-access-token:$(FLUX_PAT)@github.com/Akus/flux-simple-kubernetes-cluster.git" repo
+                    cd repo
+                    file="apps/commodity-api/overlays/${{ parameters.overlay }}/kustomization.yaml"
+                    sed -i "s|newTag: .*|newTag: \"$(imageTag)\"|" "$file"
+                    git config user.email "azuredevops@akos-demo.com"
+                    git config user.name "Azure DevOps Pipeline"
+                    if git diff --quiet; then
+                      echo "No change — ${{ parameters.overlay }} already at $(imageTag)"
+                      exit 0
+                    fi
+                    git add "$file"
+                    git commit -m "ci: promote ${{ parameters.overlay }} to $(imageTag)"
+                    git push
+                  displayName: Bump ${{ parameters.overlay }} image tag

@@ -1,0 +1,15 @@
+[project]
+name = "commodity-trading-api"
+version = "0.1.0"
+description = "Demo commodity-trading API for the AKS/Flux home-lab"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
