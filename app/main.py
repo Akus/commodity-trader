@@ -23,5 +23,5 @@ def root() -> dict[str, str]:
 
 
 # Exposes default HTTP metrics (request count/latency/in-flight) at /metrics,
-# alongside the custom business metrics registered in app.metrics.
+# alongside with the custom business metrics registered in app.metrics.
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
